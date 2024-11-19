@@ -1,3 +1,9 @@
+//For NFA Membership test we need to implement the following functions:
+// We need to run all the possible transitions for each symbol in the input string
+// We need to keep track of the current state and the path taken
+// We need to check if the current state is an accept state after processing the input string
+// We need to display the result and the path taken.
+
 import React, { useState, useRef, useEffect } from 'react';
 
 const AutomataBuilder = () => {
