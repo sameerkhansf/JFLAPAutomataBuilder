@@ -5,6 +5,7 @@
 // We need to display the result and the path taken.
 
 import React, { useState, useRef, useEffect } from 'react';
+import Button from './components/Button';
 
 const AutomataBuilder = () => {
  
@@ -118,7 +119,7 @@ const AutomataBuilder = () => {
       }
 
       const symbol = remainingInput[0];
-      const currentState = states.find(s => s.id === currentStateId);
+  
       
       // Find all possible transitions for the current state and symbol
       const possibleTransitions = transitions.filter(t => 
@@ -376,101 +377,131 @@ const AutomataBuilder = () => {
   }, [states, transitions, startState, acceptStates, selectedState, transitionStart]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4">
-      <div className="space-y-4">
-        <div className="flex gap-2 flex-wrap">
-          <button
-            className={`px-4 py-2 rounded ${drawMode === 'state' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-            onClick={() => setDrawMode('state')}
-          >
-            Add States
-          </button>
-          <button
-            className={`px-4 py-2 rounded ${drawMode === 'transition' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-            onClick={() => setDrawMode('transition')}
-          >
-            Draw Transitions
-          </button>
-          {selectedState && (
-            <>
-              <button
-                className="px-4 py-2 rounded bg-green-500 text-white"
-                onClick={() => toggleStartState(selectedState)}
-              >
-                Set Start State
-              </button>
-              <button
-                className="px-4 py-2 rounded bg-purple-500 text-white"
-                onClick={() => toggleAcceptState(selectedState)}
-              >
-                Toggle Accept State
-              </button>
-              <button
-                className="px-4 py-2 rounded bg-red-500 text-white"
-                onClick={deleteState}
-              >
-                Delete State
-              </button>
-            </>
-          )}
-          <button
-            className="px-4 py-2 rounded bg-gray-500 text-white"
-            onClick={saveAutomaton}
-          >
-            Save
-          </button>
-          <button
-            className="px-4 py-2 rounded bg-gray-500 text-white"
-            onClick={() => document.getElementById('file-input').click()}
-          >
-            Load
-          </button>
-          <input
-            id="file-input"
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={loadAutomaton}
-          />
-        </div>
-
-        <div className="flex gap-4">
-          <div className="flex flex-col">
-            <label htmlFor="testString">Test String:</label>
-            <input
-              id="testString"
-              type="text"
-              value={testString}
-              onChange={(e) => setTestString(e.target.value)}
-              className="px-4 py-2 border rounded"
-            />
-            <button
-              className="mt-2 px-4 py-2 bg-green-500 text-white rounded"
-              onClick={testMembership}
-            >
-              Test Membership
-            </button>
-          </div>
-          {testResult && (
-            <div className="flex flex-col">
-              <h3 className="font-bold">Test Result:</h3>
-              <p className={testResult.accepted ? 'text-green-600' : 'text-red-600'}>
-                {testResult.message}
-              </p>
-              <p className="italic">Path: {testResult.path}</p>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-2xl shadow-xl p-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-8">Automata Builder</h1>
+          
+          <div className="space-y-6">
+            {/* Tools Section */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">Tools</h2>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant={drawMode === 'state' ? 'primary' : 'ghost'}
+                  onClick={() => setDrawMode('state')}
+                  active={drawMode === 'state'}
+                >
+                  Add States
+                </Button>
+                <Button
+                  variant={drawMode === 'transition' ? 'primary' : 'ghost'}
+                  onClick={() => setDrawMode('transition')}
+                  active={drawMode === 'transition'}
+                >
+                  Draw Transitions
+                </Button>
+                
+                {selectedState && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => toggleStartState(selectedState)}
+                    >
+                      Set Start State
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => toggleAcceptState(selectedState)}
+                    >
+                      Toggle Accept State
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={deleteState}
+                    >
+                      Delete State
+                    </Button>
+                  </>
+                )}
+                
+                <Button
+                  variant="ghost"
+                  onClick={saveAutomaton}
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => document.getElementById('file-input').click()}
+                >
+                  Load
+                </Button>
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={loadAutomaton}
+                />
+              </div>
             </div>
-          )}
-        </div>
 
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={600}
-          onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          className="border border-gray-400"
-        ></canvas>
+            {/* Test Section */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">Test Membership</h2>
+              <div className="flex gap-6">
+                <div className="flex-1">
+                  <label htmlFor="testString" className="block text-sm font-medium text-gray-700 mb-1">
+                    Test String
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="testString"
+                      type="text"
+                      value={testString}
+                      onChange={(e) => setTestString(e.target.value)}
+                      className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                    />
+                    <Button
+                      variant="primary"
+                      onClick={testMembership}
+                    >
+                      Test
+                    </Button>
+                  </div>
+                </div>
+                
+                {testResult && (
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-700 mb-1">Result</h3>
+                    <div className={`p-3 rounded-lg ${testResult.accepted ? 'bg-green-100' : 'bg-red-100'}`}>
+                      <p className={`font-medium ${testResult.accepted ? 'text-green-800' : 'text-red-800'}`}>
+                        {testResult.message}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Path: {testResult.path}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Canvas */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <canvas
+                ref={canvasRef}
+                width={1200}
+                height={800}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseUp={handleCanvasMouseUp}
+                className="w-full border border-gray-200 rounded-lg bg-white shadow-inner"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
