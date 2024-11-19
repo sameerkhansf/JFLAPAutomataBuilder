@@ -107,34 +107,64 @@ const AutomataBuilder = () => {
       return;
     }
 
-    let currentState = states.find(s => s.id === startState);
-    const input = testString.split('');
-    const path = [currentState.label];
-
-    for (const symbol of input) {
-      const transition = transitions.find(t => 
-        t.from === currentState.id && t.symbol === symbol
-      );
-
-      if (!transition) {
-        setTestResult({ 
-          accepted: false, 
-          message: `No transition from state ${currentState.label} with symbol ${symbol}`,
-          path: path.join(' → ')
-        });
-        return;
+    // Helper function to explore all possible paths
+    const explore = (currentStateId, remainingInput, currentPath) => {
+      // Base case: if no more input, check if we're in an accept state
+      if (remainingInput.length === 0) {
+        return acceptStates.includes(currentStateId) ? {
+          accepted: true,
+          path: currentPath
+        } : null;
       }
 
-      currentState = states.find(s => s.id === transition.to);
-      path.push(currentState.label);
-    }
+      const symbol = remainingInput[0];
+      const currentState = states.find(s => s.id === currentStateId);
+      
+      // Find all possible transitions for the current state and symbol
+      const possibleTransitions = transitions.filter(t => 
+        t.from === currentStateId && t.symbol === symbol
+      );
 
-    const isAccepted = acceptStates.includes(currentState.id);
-    setTestResult({
-      accepted: isAccepted,
-      message: isAccepted ? 'String accepted!' : 'String rejected: ended in non-accepting state',
-      path: path.join(' → ')
-    });
+      // If no transitions found for this symbol, this path fails
+      if (possibleTransitions.length === 0) {
+        return null;
+      }
+
+      // Try each possible transition
+      for (const transition of possibleTransitions) {
+        const nextState = states.find(s => s.id === transition.to);
+        const result = explore(
+          transition.to,
+          remainingInput.slice(1),
+          [...currentPath, nextState.label]
+        );
+        
+        // If any path leads to acceptance, return it
+        if (result && result.accepted) {
+          return result;
+        }
+      }
+
+      // If no paths lead to acceptance, return null
+      return null;
+    };
+
+    const initialState = states.find(s => s.id === startState);
+    const result = explore(startState, testString.split(''), [initialState.label]);
+
+    if (result) {
+      setTestResult({
+        accepted: true,
+        message: 'String accepted!',
+        path: result.path.join(' → ')
+      });
+    } else {
+      setTestResult({
+        accepted: false,
+        message: 'String rejected: no accepting path found',
+        path: 'No accepting path'
+      });
+    }
   };
 
   const handleCanvasMouseDown = (e) => {

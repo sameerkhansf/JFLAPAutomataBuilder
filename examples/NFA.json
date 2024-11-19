@@ -1,0 +1,53 @@
+{
+    "states": [
+      {
+        "id": "_q0",
+        "label": "{q0}",
+        "x": 50,
+        "y": 100
+      },
+      {
+        "id": "_q1",
+        "label": "{q1}",
+        "x": 200,
+        "y": 100
+      },
+      {
+        "id": "_q2",
+        "label": "{q2}",
+        "x": 350,
+        "y": 100
+      }
+    ],
+    "transitions": [
+      {
+        "id": "_t1",
+        "from": "_q0",
+        "to": "_q1",
+        "symbol": "a"
+      },
+      {
+        "id": "_t2",
+        "from": "_q1",
+        "to": "_q2",
+        "symbol": "b"
+      },
+      {
+        "id": "_t3",
+        "from": "_q2",
+        "to": "_q0",
+        "symbol": "a"
+      },
+      {
+        "id": "_t4",
+        "from": "_q0",
+        "to": "_q2",
+        "symbol": "b"
+      }
+    ],
+    "startState": "_q0",
+    "acceptStates": [
+      "_q2"
+    ]
+  }
+  
