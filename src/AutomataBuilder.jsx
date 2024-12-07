@@ -119,10 +119,10 @@ const AutomataBuilder = () => {
       }
 
       const symbol = remainingInput[0];
-  
-      
+
+
       // Find all possible transitions for the current state and symbol
-      const possibleTransitions = transitions.filter(t => 
+      const possibleTransitions = transitions.filter(t =>
         t.from === currentStateId && t.symbol === symbol
       );
 
@@ -139,7 +139,7 @@ const AutomataBuilder = () => {
           remainingInput.slice(1),
           [...currentPath, nextState.label]
         );
-        
+
         // If any path leads to acceptance, return it
         if (result && result.accepted) {
           return result;
@@ -211,15 +211,35 @@ const AutomataBuilder = () => {
       const endState = findStateAtPosition(pos);
 
       if (endState) {
-        const symbol = prompt('Enter transition symbol:', '');
-        if (symbol !== null && symbol.trim() !== '') {
-          const newTransition = {
-            id: generateId(),
-            from: transitionStart.id,
-            to: endState.id,
-            symbol: symbol.trim()
-          };
-          setTransitions([...transitions, newTransition]);
+        const symbolInput = prompt('Enter transition symbol(s), separated by a comma (e.g., a,b):', '');
+        if (symbolInput !== null && symbolInput.trim() !== '') {
+          const symbols = symbolInput.split(',').map(symbol => symbol.trim());
+          
+          // Check if a transition already exists between these states
+          const existingTransition = transitions.find(t => 
+            t.from === transitionStart.id && t.to === endState.id
+          );
+
+          if (existingTransition) {
+            // Combine symbols with existing transition
+            const existingSymbols = existingTransition.symbol.split(',');
+            const newSymbols = [...new Set([...existingSymbols, ...symbols])]; // Remove duplicates
+            
+            setTransitions(prevTransitions => prevTransitions.map(t =>
+              t.id === existingTransition.id
+                ? { ...t, symbol: newSymbols.join(',') }
+                : t
+            ));
+          } else {
+            // Create new transition with all symbols
+            const newTransition = {
+              id: generateId(),
+              from: transitionStart.id,
+              to: endState.id,
+              symbol: symbols.join(',')
+            };
+            setTransitions(prevTransitions => [...prevTransitions, newTransition]);
+          }
         }
       }
     }
@@ -227,10 +247,24 @@ const AutomataBuilder = () => {
     setTransitionStart(null);
   };
 
+  // Function to clear the DFA/NFA
+  const clearAutomaton = () => {
+    setStates([]); // Clear all states
+    setTransitions([]); // Clear all transitions
+    setStartState(null); // Reset the start state
+    setAcceptStates([]); // Clear the accept states
+    setSelectedState(null); // Reset the selected state
+    setTestString(''); // Clear the test string
+    setTestResult(null); // Clear the test result
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // To store the label positions for overlap detection
+    let labelPositions = [];
 
     // Draw transitions with enhanced arrows
     transitions.forEach(({ from, to, symbol }) => {
@@ -242,10 +276,11 @@ const AutomataBuilder = () => {
       const dx = toState.x - fromState.x;
       const dy = toState.y - fromState.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      
+
       // Determine if it's a self-loop
       const isSelfLoop = from === to;
-      
+
+      let labelX, labelY;
       if (isSelfLoop) {
         // Draw self-loop
         ctx.beginPath();
@@ -281,15 +316,15 @@ const AutomataBuilder = () => {
         const midX = (fromState.x + toState.x) / 2;
         const midY = (fromState.y + toState.y) / 2;
         const curvature = 30; // Increase for more curve
-        
+
         // Normal vector to the line between states
         const nx = -dy / distance;
         const ny = dx / distance;
-        
+
         // Control point
         const cpX = midX + nx * curvature;
         const cpY = midY + ny * curvature;
-        
+
         // Draw the curved arrow
         ctx.beginPath();
         ctx.strokeStyle = '#666';
@@ -302,10 +337,10 @@ const AutomataBuilder = () => {
         const t = 0.9; // Position along the curve (0-1)
         const arrowX = (1-t)*(1-t)*fromState.x + 2*(1-t)*t*cpX + t*t*toState.x;
         const arrowY = (1-t)*(1-t)*fromState.y + 2*(1-t)*t*cpY + t*t*toState.y;
-        
+
         // Calculate angle for arrowhead
         const angle = Math.atan2(toState.y - arrowY, toState.x - arrowX);
-        
+
         // Draw enhanced arrowhead
         ctx.beginPath();
         ctx.moveTo(arrowX, arrowY);
@@ -377,134 +412,142 @@ const AutomataBuilder = () => {
   }, [states, transitions, startState, acceptStates, selectedState, transitionStart]);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Automata Builder</h1>
-          
-          <div className="space-y-6">
-            {/* Tools Section */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h2 className="text-lg font-semibold text-gray-700 mb-4">Tools</h2>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  variant={drawMode === 'state' ? 'primary' : 'ghost'}
-                  onClick={() => setDrawMode('state')}
-                  active={drawMode === 'state'}
-                >
-                  Add States
-                </Button>
-                <Button
-                  variant={drawMode === 'transition' ? 'primary' : 'ghost'}
-                  onClick={() => setDrawMode('transition')}
-                  active={drawMode === 'transition'}
-                >
-                  Draw Transitions
-                </Button>
-                
-                {selectedState && (
-                  <>
-                    <Button
-                      variant="secondary"
-                      onClick={() => toggleStartState(selectedState)}
-                    >
-                      Set Start State
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => toggleAcceptState(selectedState)}
-                    >
-                      Toggle Accept State
-                    </Button>
-                    <Button
-                      variant="danger"
-                      onClick={deleteState}
-                    >
-                      Delete State
-                    </Button>
-                  </>
-                )}
-                
-                <Button
-                  variant="ghost"
-                  onClick={saveAutomaton}
-                >
-                  Save
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => document.getElementById('file-input').click()}
-                >
-                  Load
-                </Button>
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".json"
-                  className="hidden"
-                  onChange={loadAutomaton}
-                />
-              </div>
-            </div>
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-8">Automata Builder</h1>
 
-            {/* Test Section */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h2 className="text-lg font-semibold text-gray-700 mb-4">Test Membership</h2>
-              <div className="flex gap-6">
-                <div className="flex-1">
-                  <label htmlFor="testString" className="block text-sm font-medium text-gray-700 mb-1">
-                    Test String
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="testString"
-                      type="text"
-                      value={testString}
-                      onChange={(e) => setTestString(e.target.value)}
-                      className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                    />
-                    <Button
-                      variant="primary"
-                      onClick={testMembership}
-                    >
-                      Test
-                    </Button>
-                  </div>
+            <div className="space-y-6">
+              {/* Tools Section */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h2 className="text-lg font-semibold text-gray-700 mb-4">Tools</h2>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                      variant={drawMode === 'state' ? 'primary' : 'ghost'}
+                      onClick={() => setDrawMode('state')}
+                      active={drawMode === 'state'}
+                  >
+                    Add States
+                  </Button>
+                  <Button
+                      variant={drawMode === 'transition' ? 'primary' : 'ghost'}
+                      onClick={() => setDrawMode('transition')}
+                      active={drawMode === 'transition'}
+                  >
+                    Draw Transitions
+                  </Button>
+
+                  {selectedState && (
+                      <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => toggleStartState(selectedState)}
+                        >
+                          Set Start State
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            onClick={() => toggleAcceptState(selectedState)}
+                        >
+                          Toggle Accept State
+                        </Button>
+                        <Button
+                            variant="danger"
+                            onClick={deleteState}
+                        >
+                          Delete State
+                        </Button>
+                      </>
+                  )}
+
+                  <Button
+                      variant="ghost"
+                      onClick={saveAutomaton}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                      variant="ghost"
+                      onClick={() => document.getElementById('file-input').click()}
+                  >
+                    Load
+                  </Button>
+                  <input
+                      id="file-input"
+                      type="file"
+                      accept=".json"
+                      className="hidden"
+                      onChange={loadAutomaton}
+                  />
+                  <Button
+                      variant="ghost"
+                      onClick={clearAutomaton} // Calls the clearAutomaton function
+                  >
+                    Clear
+                  </Button>
                 </div>
-                
-                {testResult && (
+              </div>
+
+              {/* Test Section */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h2 className="text-lg font-semibold text-gray-700 mb-4">Test Membership</h2>
+                <div className="flex gap-6">
                   <div className="flex-1">
-                    <h3 className="text-sm font-medium text-gray-700 mb-1">Result</h3>
-                    <div className={`p-3 rounded-lg ${testResult.accepted ? 'bg-green-100' : 'bg-red-100'}`}>
-                      <p className={`font-medium ${testResult.accepted ? 'text-green-800' : 'text-red-800'}`}>
-                        {testResult.message}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Path: {testResult.path}
-                      </p>
+                    <label htmlFor="testString" className="block text-sm font-medium text-gray-700 mb-1">
+                      Test String
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                          id="testString"
+                          type="text"
+                          value={testString}
+                          onChange={(e) => setTestString(e.target.value)}
+                          className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                      />
+                      <Button
+                          variant="primary"
+                          onClick={testMembership}
+                      >
+                        Test
+                      </Button>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Canvas */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <canvas
-                ref={canvasRef}
-                width={1200}
-                height={800}
-                onMouseDown={handleCanvasMouseDown}
-                onMouseMove={handleCanvasMouseMove}
-                onMouseUp={handleCanvasMouseUp}
-                className="w-full border border-gray-200 rounded-lg bg-white shadow-inner"
-              />
+                  {testResult && (
+                      <div className="flex-1">
+                        <h3 className="text-sm font-medium text-gray-700 mb-1">Result</h3>
+                        <div className={`p-3 rounded-lg ${testResult.accepted ? 'bg-green-100' : 'bg-red-100'}`}>
+                          <p className={`font-medium ${testResult.accepted ? 'text-green-800' : 'text-red-800'}`}>
+                            {testResult.message}
+                          </p>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Path: {testResult.path}
+                          </p>
+                        </div>
+                      </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Canvas */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <canvas
+                    ref={canvasRef}
+                    width={1200}
+                    height={800}
+                    style={{ backgroundColor: '#f0f0f0', border: '1px solid #ccc' }}
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    className="w-full border border-gray-200 rounded-lg bg-white shadow-inner"
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
   );
+
 };
 
 export default AutomataBuilder;
