@@ -7,6 +7,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Button from './components/Button';
 
+const EPSILON = 'ε';
+
 const AutomataBuilder = () => {
  
   const [states, setStates] = useState([]);
@@ -109,50 +111,79 @@ const AutomataBuilder = () => {
       return;
     }
 
+    // Helper function to get epsilon closure of a state
+    const getEpsilonClosure = (stateId, visited = new Set()) => {
+      if (visited.has(stateId)) return [];
+      visited.add(stateId);
+
+      const epsilonTransitions = transitions.filter(t => 
+        t.from === stateId && t.symbol === EPSILON
+      );
+
+      const reachableStates = [stateId];
+      epsilonTransitions.forEach(transition => {
+        reachableStates.push(...getEpsilonClosure(transition.to, visited));
+      });
+
+      return [...new Set(reachableStates)];
+    };
+
     // Helper function to explore all possible paths
-    const explore = (currentStateId, remainingInput, currentPath) => {
-      // Base case: if no more input, check if we're in an accept state
+    const explore = (currentStates, remainingInput, currentPath, visited = new Set()) => {
+      // Convert visited array to string for Set storage
+      const visitedKey = `${currentStates.join(',')}:${remainingInput}`;
+      if (visited.has(visitedKey)) return null;
+      visited.add(visitedKey);
+
+      // Get epsilon closure for all current states
+      const expandedStates = currentStates.flatMap(stateId => getEpsilonClosure(stateId));
+      const uniqueExpandedStates = [...new Set(expandedStates)];
+
+      // Base case: if no more input, check if any current state is an accept state
       if (remainingInput.length === 0) {
-        return acceptStates.includes(currentStateId) ? {
-          accepted: true,
-          path: currentPath
-        } : null;
+        return uniqueExpandedStates.some(stateId => acceptStates.includes(stateId)) 
+          ? { accepted: true, path: currentPath }
+          : null;
       }
 
       const symbol = remainingInput[0];
+      const nextStates = new Set();
+      const nextPaths = new Map();
 
+      // Find all possible transitions for current states and symbol
+      uniqueExpandedStates.forEach(stateId => {
+        const possibleTransitions = transitions.filter(t =>
+          t.from === stateId && t.symbol === symbol
+        );
 
-      // Find all possible transitions for the current state and symbol
-      const possibleTransitions = transitions.filter(t =>
-        t.from === currentStateId && t.symbol === symbol
-      );
+        possibleTransitions.forEach(transition => {
+          nextStates.add(transition.to);
+          const state = states.find(s => s.id === transition.to);
+          if (state) {
+            nextPaths.set(transition.to, state.label);
+          }
+        });
+      });
 
       // If no transitions found for this symbol, this path fails
-      if (possibleTransitions.length === 0) {
+      if (nextStates.size === 0) {
         return null;
       }
 
-      // Try each possible transition
-      for (const transition of possibleTransitions) {
-        const nextState = states.find(s => s.id === transition.to);
-        const result = explore(
-          transition.to,
-          remainingInput.slice(1),
-          [...currentPath, nextState.label]
-        );
+      // Try each possible next state
+      const nextStatesArray = Array.from(nextStates);
+      const result = explore(
+        nextStatesArray,
+        remainingInput.slice(1),
+        [...currentPath, Array.from(nextPaths.values()).join('/')],
+        visited
+      );
 
-        // If any path leads to acceptance, return it
-        if (result && result.accepted) {
-          return result;
-        }
-      }
-
-      // If no paths lead to acceptance, return null
-      return null;
+      return result;
     };
 
     const initialState = states.find(s => s.id === startState);
-    const result = explore(startState, testString.split(''), [initialState.label]);
+    const result = explore([startState], testString.split(''), [initialState.label]);
 
     if (result) {
       setTestResult({
@@ -222,7 +253,7 @@ const AutomataBuilder = () => {
       const endState = findStateAtPosition(pos);
 
       if (endState) {
-        const symbolInput = prompt('Enter transition symbol(s), separated by a comma (e.g., a,b):', '');
+        const symbolInput = prompt('Enter transition symbol(s), separated by comma. Use "ε" for epsilon transition:', '');
         if (symbolInput !== null && symbolInput.trim() !== '') {
           // Split the symbols by comma and trim any extra spaces
           const symbols = symbolInput.split(',').map(symbol => symbol.trim());
@@ -233,7 +264,7 @@ const AutomataBuilder = () => {
               id: generateId(),
               from: transitionStart.id,
               to: endState.id,
-              symbol: symbol
+              symbol: symbol === 'e' ? EPSILON : symbol // Convert 'e' to ε symbol
             };
             setTransitions(prevTransitions => [...prevTransitions, newTransition]);
           });
