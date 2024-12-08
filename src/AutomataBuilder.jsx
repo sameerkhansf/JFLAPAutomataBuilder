@@ -4,7 +4,7 @@
 // We need to check if the current state is an accept state after processing the input string
 // We need to display the result and the path taken.
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Button from './components/Button';
 
 const AutomataBuilder = () => {
@@ -18,6 +18,7 @@ const AutomataBuilder = () => {
   const [transitionStart, setTransitionStart] = useState(null);
   const [testString, setTestString] = useState('');
   const [testResult, setTestResult] = useState(null);
+  const [selectedTransition, setSelectedTransition] = useState(null);
   
   const canvasRef = useRef(null);
   const [draggedState, setDraggedState] = useState(null);
@@ -172,6 +173,9 @@ const AutomataBuilder = () => {
     const pos = getMousePosition(e);
     const clickedState = findStateAtPosition(pos);
 
+    // Reset selections
+    setSelectedTransition(null);
+    
     if (clickedState) {
       if (drawMode === 'state') {
         setDraggedState(clickedState);
@@ -183,14 +187,21 @@ const AutomataBuilder = () => {
       } else if (drawMode === 'transition') {
         setTransitionStart(clickedState);
       }
-    } else if (drawMode === 'state') {
-      const newState = {
-        id: generateId(),
-        label: `q${states.length}`,
-        x: pos.x,
-        y: pos.y
-      };
-      setStates([...states, newState]);
+    } else {
+      // Check if clicked on a transition
+      const clickedTransition = findTransitionAtPosition(pos);
+      if (clickedTransition) {
+        setSelectedTransition(clickedTransition);
+        setSelectedState(null);
+      } else if (drawMode === 'state') {
+        const newState = {
+          id: generateId(),
+          label: `q${states.length}`,
+          x: pos.x,
+          y: pos.y
+        };
+        setStates([...states, newState]);
+      }
     }
   };
 
@@ -213,33 +224,19 @@ const AutomataBuilder = () => {
       if (endState) {
         const symbolInput = prompt('Enter transition symbol(s), separated by a comma (e.g., a,b):', '');
         if (symbolInput !== null && symbolInput.trim() !== '') {
+          // Split the symbols by comma and trim any extra spaces
           const symbols = symbolInput.split(',').map(symbol => symbol.trim());
-          
-          // Check if a transition already exists between these states
-          const existingTransition = transitions.find(t => 
-            t.from === transitionStart.id && t.to === endState.id
-          );
 
-          if (existingTransition) {
-            // Combine symbols with existing transition
-            const existingSymbols = existingTransition.symbol.split(',');
-            const newSymbols = [...new Set([...existingSymbols, ...symbols])]; // Remove duplicates
-            
-            setTransitions(prevTransitions => prevTransitions.map(t =>
-              t.id === existingTransition.id
-                ? { ...t, symbol: newSymbols.join(',') }
-                : t
-            ));
-          } else {
-            // Create new transition with all symbols
+          // Create a new transition for each symbol
+          symbols.forEach(symbol => {
             const newTransition = {
               id: generateId(),
               from: transitionStart.id,
               to: endState.id,
-              symbol: symbols.join(',')
+              symbol: symbol
             };
             setTransitions(prevTransitions => [...prevTransitions, newTransition]);
-          }
+          });
         }
       }
     }
@@ -258,111 +255,194 @@ const AutomataBuilder = () => {
     setTestResult(null); // Clear the test result
   };
 
+  // Add this helper function to get all transitions between two states
+  const getTransitionsBetweenStates = useCallback((fromId, toId) => {
+    return transitions.filter(t => t.from === fromId && t.to === toId);
+  }, [transitions]);
+
+  // Update the drawArrow function to handle multiple transitions
+  const drawArrow = useCallback((ctx, from, to, transition, isSelected = false, transitionIndex = 0, totalTransitions = 1) => {
+    const headLength = 15;
+    const headAngle = Math.PI / 6;
+    const stateRadius = 25;
+    
+    // Handle self-transitions (loops)
+    if (from.id === to.id) {
+      // Calculate offset based on number of self-loops
+      const angleOffset = (Math.PI / 6) * (transitionIndex - (totalTransitions - 1) / 2);
+      const loopRadius = 35;
+      
+      // Starting point on the state circle
+      const startAngle = -Math.PI / 2 + angleOffset;
+      const startX = from.x + stateRadius * Math.cos(startAngle);
+      const startY = from.y + stateRadius * Math.sin(startAngle);
+      
+      // Control points for the bezier curve
+      const controlX1 = from.x + loopRadius * 2 * Math.cos(startAngle - Math.PI / 6);
+      const controlY1 = from.y + loopRadius * 2 * Math.sin(startAngle - Math.PI / 6);
+      const controlX2 = from.x + loopRadius * 2 * Math.cos(startAngle + Math.PI / 6);
+      const controlY2 = from.y + loopRadius * 2 * Math.sin(startAngle + Math.PI / 6);
+      
+      // End point slightly offset from start point
+      const endAngle = startAngle + Math.PI / 6;
+      const endX = from.x + stateRadius * Math.cos(endAngle);
+      const endY = from.y + stateRadius * Math.sin(endAngle);
+      
+      // Draw the loop
+      ctx.beginPath();
+      ctx.strokeStyle = isSelected ? '#7c3aed' : '#4b5563';
+      ctx.lineWidth = isSelected ? 3 : 2;
+      ctx.moveTo(startX, startY);
+      ctx.bezierCurveTo(controlX1, controlY1, controlX2, controlY2, endX, endY);
+      ctx.stroke();
+      
+      // Calculate arrow head position and angle
+      const arrowAngle = Math.atan2(endY - controlY2, endX - controlX2);
+      
+      // Draw arrow head
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(
+        endX - headLength * Math.cos(arrowAngle - headAngle),
+        endY - headLength * Math.sin(arrowAngle - headAngle)
+      );
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(
+        endX - headLength * Math.cos(arrowAngle + headAngle),
+        endY - headLength * Math.sin(arrowAngle + headAngle)
+      );
+      ctx.stroke();
+      
+      // Draw label
+      const labelRadius = loopRadius * 1.5;
+      const labelAngle = startAngle + Math.PI / 12;
+      const labelX = from.x + labelRadius * Math.cos(labelAngle);
+      const labelY = from.y + labelRadius * Math.sin(labelAngle);
+      
+      drawTransitionLabel(ctx, transition.symbol, labelX, labelY, isSelected);
+      return;
+    }
+    
+    // Rest of the existing drawArrow code for non-self-loops...
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // For transitions between different states
+    const curveOffset = totalTransitions > 1 
+      ? (transitionIndex - (totalTransitions - 1) / 2) * 30 
+      : 0;
+      
+    // Calculate control point for curved line
+    const midX = (from.x + to.x) / 2;
+    const midY = (from.y + to.y) / 2;
+    const normalX = -dy / distance;
+    const normalY = dx / distance;
+    
+    const controlX = midX + normalX * curveOffset;
+    const controlY = midY + normalY * curveOffset;
+    
+    // Calculate points outside the state circles
+    const startAngle = Math.atan2(controlY - from.y, controlX - from.x);
+    const endAngle = Math.atan2(controlY - to.y, controlX - to.x);
+    
+    const startX = from.x + stateRadius * Math.cos(startAngle);
+    const startY = from.y + stateRadius * Math.sin(startAngle);
+    const endX = to.x + stateRadius * Math.cos(endAngle);
+    const endY = to.y + stateRadius * Math.sin(endAngle);
+    
+    // Draw the curved arrow
+    ctx.beginPath();
+    ctx.strokeStyle = isSelected ? '#7c3aed' : '#4b5563';
+    ctx.lineWidth = isSelected ? 3 : 2;
+    ctx.moveTo(startX, startY);
+    ctx.quadraticCurveTo(controlX, controlY, endX, endY);
+    ctx.stroke();
+    
+    // Draw arrow head
+    const arrowAngle = Math.atan2(endY - controlY, endX - controlX);
+    ctx.beginPath();
+    ctx.moveTo(endX, endY);
+    ctx.lineTo(
+      endX - headLength * Math.cos(arrowAngle - headAngle),
+      endY - headLength * Math.sin(arrowAngle - headAngle)
+    );
+    ctx.moveTo(endX, endY);
+    ctx.lineTo(
+      endX - headLength * Math.cos(arrowAngle + headAngle),
+      endY - headLength * Math.sin(arrowAngle + headAngle)
+    );
+    ctx.stroke();
+    
+    // Draw transition label
+    const labelX = controlX;
+    const labelY = controlY;
+    drawTransitionLabel(ctx, transition.symbol, labelX, labelY, isSelected);
+  }, []);
+
+  // Add a helper function to draw transition labels
+  const drawTransitionLabel = (ctx, symbol, x, y, isSelected) => {
+    const padding = 8;
+    const textWidth = ctx.measureText(symbol).width;
+    const boxWidth = textWidth + padding * 2;
+    const boxHeight = 24;
+    
+    // Draw tooltip background
+    ctx.fillStyle = isSelected ? '#7c3aed' : '#ffffff';
+    ctx.strokeStyle = isSelected ? '#7c3aed' : '#4b5563';
+    ctx.beginPath();
+    ctx.roundRect(
+      x - boxWidth / 2,
+      y - boxHeight / 2,
+      boxWidth,
+      boxHeight,
+      5
+    );
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw symbol text
+    ctx.fillStyle = isSelected ? '#ffffff' : '#1f2937';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(symbol, x, y);
+  };
+
+  // Add this helper function to detect clicks on transitions
+  const findTransitionAtPosition = (pos) => {
+    return transitions.find(t => 
+      Math.sqrt(Math.pow(t.x - pos.x, 2) + Math.pow(t.y - pos.y, 2)) < 25
+    );
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // To store the label positions for overlap detection
-    let labelPositions = [];
-
-    // Draw transitions with enhanced arrows
-    transitions.forEach(({ from, to, symbol }) => {
-      const fromState = states.find(s => s.id === from);
-      const toState = states.find(s => s.id === to);
-      if (!fromState || !toState) return;
-
-      // Calculate control points for bezier curve
-      const dx = toState.x - fromState.x;
-      const dy = toState.y - fromState.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // Determine if it's a self-loop
-      const isSelfLoop = from === to;
-
-      let labelX, labelY;
-      if (isSelfLoop) {
-        // Draw self-loop
-        ctx.beginPath();
-        ctx.strokeStyle = '#666';
-        ctx.lineWidth = 2;
-        const radius = 25;
-        ctx.arc(fromState.x, fromState.y - radius, radius, 0.3 * Math.PI, 2.7 * Math.PI);
-        ctx.stroke();
-
-        // Draw arrowhead for self-loop
-        const angle = -0.3 * Math.PI;
-        ctx.beginPath();
-        ctx.moveTo(fromState.x + radius * Math.cos(angle), fromState.y - radius + radius * Math.sin(angle));
-        ctx.lineTo(
-          fromState.x + (radius + 10) * Math.cos(angle + 0.2),
-          fromState.y - radius + (radius + 10) * Math.sin(angle + 0.2)
-        );
-        ctx.lineTo(
-          fromState.x + (radius - 10) * Math.cos(angle - 0.2),
-          fromState.y - radius + (radius - 10) * Math.sin(angle - 0.2)
-        );
-        ctx.fillStyle = '#666';
-        ctx.fill();
-
-        // Draw symbol above self-loop
-        ctx.fillStyle = '#000';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(symbol, fromState.x, fromState.y - 2 * radius);
-      } else {
-        // Calculate control point for curved line
-        const midX = (fromState.x + toState.x) / 2;
-        const midY = (fromState.y + toState.y) / 2;
-        const curvature = 30; // Increase for more curve
-
-        // Normal vector to the line between states
-        const nx = -dy / distance;
-        const ny = dx / distance;
-
-        // Control point
-        const cpX = midX + nx * curvature;
-        const cpY = midY + ny * curvature;
-
-        // Draw the curved arrow
-        ctx.beginPath();
-        ctx.strokeStyle = '#666';
-        ctx.lineWidth = 2;
-        ctx.moveTo(fromState.x, fromState.y);
-        ctx.quadraticCurveTo(cpX, cpY, toState.x, toState.y);
-        ctx.stroke();
-
-        // Calculate point near the end for arrowhead
-        const t = 0.9; // Position along the curve (0-1)
-        const arrowX = (1-t)*(1-t)*fromState.x + 2*(1-t)*t*cpX + t*t*toState.x;
-        const arrowY = (1-t)*(1-t)*fromState.y + 2*(1-t)*t*cpY + t*t*toState.y;
-
-        // Calculate angle for arrowhead
-        const angle = Math.atan2(toState.y - arrowY, toState.x - arrowX);
-
-        // Draw enhanced arrowhead
-        ctx.beginPath();
-        ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(
-          arrowX - 15 * Math.cos(angle - Math.PI / 6),
-          arrowY - 15 * Math.sin(angle - Math.PI / 6)
-        );
-        ctx.lineTo(
-          arrowX - 15 * Math.cos(angle + Math.PI / 6),
-          arrowY - 15 * Math.sin(angle + Math.PI / 6)
-        );
-        ctx.closePath();
-        ctx.fillStyle = '#666';
-        ctx.fill();
-
-        // Draw transition symbol
-        ctx.fillStyle = '#000';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(symbol, cpX, cpY);
-      }
+    // Group transitions by their from/to states
+    const drawnTransitions = new Set();
+    
+    states.forEach(fromState => {
+      states.forEach(toState => {
+        const transitionsForPair = getTransitionsBetweenStates(fromState.id, toState.id);
+        if (transitionsForPair.length > 0) {
+          transitionsForPair.forEach((transition, index) => {
+            const isSelected = selectedState?.id === transition.id;
+            drawArrow(
+              ctx,
+              fromState,
+              toState,
+              transition,
+              isSelected,
+              index,
+              transitionsForPair.length
+            );
+            drawnTransitions.add(transition.id);
+          });
+        }
+      });
     });
 
     // Draw states
@@ -409,7 +489,16 @@ const AutomataBuilder = () => {
       ctx.fillText(state.label, state.x, state.y);
     });
 
-  }, [states, transitions, startState, acceptStates, selectedState, transitionStart]);
+  }, [
+    states, 
+    transitions, 
+    startState, 
+    acceptStates, 
+    selectedState, 
+    selectedTransition,
+    drawArrow, 
+    getTransitionsBetweenStates
+  ]);
 
   return (
       <div className="min-h-screen bg-gray-50 py-8">
